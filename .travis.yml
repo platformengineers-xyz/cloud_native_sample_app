@@ -1,0 +1,17 @@
+sudo: required
+language: java
+jdk:
+- openjdk8
+env:
+  global:
+  - SERVICE_PORT=8080
+stages:
+- local build and test
+jobs:
+  include:
+  - stage: local build and test
+    script:
+    - mvn install
+    - java -jar ./target/cloudnativesampleapp-1.0-SNAPSHOT.jar &
+    - bash scripts/health_check.sh
+    - bash scripts/api_tests.sh 127.0.0.1 ${SERVICE_PORT}

@@ -12,6 +12,7 @@ env:
 stages:
 - local build and test
 - docker build, deploy, and test
+- kubernetes build, deploy, and test
 jobs:
   include:
   - stage: local build and test
@@ -37,3 +38,27 @@ jobs:
     - docker tag $IMAGE_NAME:$COMMIT $DOCKER_REPO/$IMAGE_NAME:$COMMIT
     - docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}
     - docker push $DOCKER_REPO/$IMAGE_NAME:$COMMIT
+  - stage: kubernetes build, deploy, and test
+    services:
+    - docker
+    env:
+    - CHANGE_MINIKUBE_NONE_USER=true
+    install:
+    - true
+    before_script:
+    - bash scripts/install_minikube_and_helm.sh
+    script:
+    - helm install --set image.tag=$COMMIT --name ${RELEASE_NAME} ./chart/cloudnativesampleapp
+    - kubectl get deployments ${RELEASE_NAME}-deployment -o yaml
+    - READY=$(kubectl get deployments ${RELEASE_NAME}-deployment -o yaml | grep "readyReplicas"
+      | awk '{print $2}')
+    - echo $READY
+    - until [ -n "$READY" ] && [ ${READY} -ge 1 ]; do READY=$(kubectl get deployments
+      ${RELEASE_NAME}-deployment -o yaml | grep "readyReplicas" | awk '{print $2}');
+      kubectl get deployments -o wide; echo "Waiting for Greeting service to be ready";
+      sleep 10; done
+    - sleep 20
+    - MINIKUBE_IP=$(minikube ip)
+    - NODE_PORT=$(kubectl get service ${RELEASE_NAME}-service -o=jsonpath='{.spec.ports[0].nodePort}')
+    - bash scripts/api_tests.sh $MINIKUBE_IP $NODE_PORT
+    - bash scripts/push.sh $COMMIT $GH_TOKEN

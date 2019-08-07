@@ -8,4 +8,4 @@
 
 To build and run the application:
 1. `mvn install`
-1. `java -jar ./target/cloudnativesampleapp-1.0-SNAPSHOT.jar`
+2. `java -jar ./target/cloudnativesampleapp-1.0-SNAPSHOT.jar`

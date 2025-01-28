@@ -1,9 +1,10 @@
+# update to newer base image
 FROM docker.io/maven:3.8.6-jdk-8 as builder
 
 COPY . .
 
 RUN mvn clean install
-
+# update to newer base image
 FROM docker.io/openjdk:8-jdk-alpine as staging
 
 COPY --chown=1001:0 --from=builder /target/cloudnativesampleapp-1.0-SNAPSHOT.jar /config/app.jar

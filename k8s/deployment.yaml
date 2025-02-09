@@ -1,0 +1,29 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: cloudnative
+  labels:
+    app: cloudnative
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudnative
+  template:
+    metadata:
+      labels:
+        app: cloudnative
+    spec:
+      containers:
+        - name: cloud-native-sample-app
+          image: 'image-registry.openshift-image-registry.svc:5000/tekton-demo/cloud-native-sample-app:v1.0.0'
+          imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600

@@ -1,0 +1,14 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: cloudnative
+  labels:
+    app: cloudnative
+spec:
+  ports:
+    - protocol: TCP
+      port: 9080
+      targetPort: 9080
+  type: ClusterIP
+  selector:
+    app: cloudnative

@@ -6,6 +6,3 @@ resources:
 - service.yaml
 - route.yaml
 
-images:
-- name: image-registry.openshift-image-registry.svc:5000/tekton-demo/cloud-native-sample-app
-  newTag: v1.0.0

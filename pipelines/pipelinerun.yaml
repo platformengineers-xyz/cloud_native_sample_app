@@ -1,0 +1,40 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  labels:
+    tekton.dev/pipeline: app-build
+  generateName: app-build-qup9da
+spec:
+  params:
+  - name: gitops-repo
+    value: UPDATE-ME # e.g. JohnDoe/pe-bootcamp-gitops
+  - name: source-repo
+    value: UPDATE-ME # e.g. git@github.com:JohnDoe/cloud_native_sample_app.git
+  - name: image_registry
+    value: image-registry.openshift-image-registry.svc:5000/tekton-demo/cloud-native-sample-app
+  - name: app-name
+    value: cloud-native-sample-app
+  - name: gitops-secret-name
+    value: gitops-token
+  - name: gitops-secret-key
+    value: GH_TOKEN
+  pipelineRef:
+    name: app-build
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  timeouts:
+    pipeline: 1h0m0s
+  workspaces:
+  - name: source
+    volumeClaimTemplate:
+      metadata:
+        creationTimestamp: null
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: ocs-storagecluster-cephfs
+        volumeMode: Filesystem
+      status: {}

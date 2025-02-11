@@ -1,0 +1,55 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  annotations:
+  name: gitops-create-new-branch
+spec:
+  params:
+  - name: directory
+    type: string
+  - description: the username and repository for the gitops repository, e.g. youruser/pe-bootcamp-gitops
+    name: gitops-repo
+    type: string
+  - description: A name for the new branch to create for this feature
+    name: new-branch
+    type: string
+  - description: Name for a secret containing the github PAT to clone the repo with
+    name: GITHUB_TOKEN_SECRET_NAME
+    type: string
+  - description: Name for a secret containing the github PAT to clone the repo with
+    name: GITHUB_TOKEN_SECRET_KEY
+    type: string
+  steps:
+  - args:
+    - |-
+        echo "Fetching token"
+        GH_TOKEN="$(cat /etc/gitops-new-branch/$(params.GITHUB_TOKEN_SECRET_KEY))"
+        echo "Cloning Repo"
+        git clone -b main https://$GH_TOKEN@github.com/$(params.gitops-repo).git/ gitops 
+        git config --global user.email "tekton@ibmcloud.com" 
+        git config --global user.name "Tekton Pipeline" 
+        cd gitops/
+        mkdir -p $(params.directory)
+        cp ../k8s/manifests.yaml $(params.directory)/
+
+        git checkout -b $(params.new-branch)
+        git add .
+        git commit -m "Updating image name" --allow-empty 
+        git push --set-upstream origin $(params.new-branch)
+    command:
+    - /bin/bash
+    - -c
+    computeResources: {}
+    image: docker.io/csantanapr/helm-kubectl-curl-git-jq-yq
+    name: gitops
+    volumeMounts:
+    - mountPath: /etc/gitops-new-branch
+      name: githubtoken
+      readOnly: true
+    workingDir: $(workspaces.source.path)
+  volumes:
+  - name: githubtoken
+    secret:
+      secretName: $(params.GITHUB_TOKEN_SECRET_NAME)
+  workspaces:
+  - name: source

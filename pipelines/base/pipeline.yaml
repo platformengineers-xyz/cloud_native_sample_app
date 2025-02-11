@@ -1,81 +1,131 @@
-apiVersion: tekton.dev/v1beta1
+apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: pipeline
+  name: app-build
 spec:
   params:
-    - description: ssh url for git-repo
-      name: source-repo
-      type: string
-    - description: ssh url for gitops-repo
-      name: gitops-repo
-      type: string
-    - description: Docker image repository
-      name: docker-image
-      type: string
-    - description: Application name
-      name: app-name
-      type: string
-    - default: ./Dockerfile
-      description: sets the Dockerfile to build
-      name: dockerfile
-      type: string
+  - description: username/repo-name, e.g. JohnDoe/pe-bootcamp-gitops
+    name: gitops-repo
+    type: string
+  - description: SSH url for the source repository
+    name: source-repo
+    type: string
+  - name: image_registry
+    type: string
+  - description: Application name
+    name: app-name
+    type: string
+  - default: gitops-token
+    description: A secret containing the PAT for the gitops repo
+    name: gitops-secret-name
+    type: string
+  - default: GH_TOKEN
+    description: The secret key for the PAT
+    name: gitops-secret-key
+    type: string
   tasks:
-    - name: clone-repository
-      params:
-        - name: url
-          value: $(params.source-repo)
-      taskRef:
-        kind: ClusterTask
-        name: git-clone
-      workspaces:
-        - name: output
-          workspace: pipeline-shared-data
-    - name: build-and-push-image
-      params:
-        - name: DOCKERFILE
-          value: $(params.dockerfile)
-        - name: TLSVERIFY
-          value: 'false'
-        - name: IMAGE
-          value: $(params.docker-image)
-      runAfter:
-        - clone-repository
-      taskRef:
-        kind: ClusterTask
-        name: buildah
-      workspaces:
-        - name: source
-          workspace: pipeline-shared-data
-    - name: kustomize-build
-      params:
-        - name: app-name
-          value: $(params.app-name)
-        - name: app-namespace
-          value: $(context.pipelineRun.namespace)
-        - name: image-with-tag
-          value: $(params.docker-image)
-      runAfter:
-        - build-and-push-image
-      taskRef:
-        kind: Task
-        name: kustomize-build
-      workspaces:
-        - name: source
-          workspace: pipeline-shared-data
-    - name: gitops
-      params:
-        - name: directory
-          value: '$(params.app-name)'
-        - name: gitops-repo
-          value: '$(params.gitops-repo)'
-      runAfter:
-        - kustomize-build
-      taskRef:
-        kind: Task
-        name: gitops
-      workspaces:
-        - name: source
-          workspace: pipeline-shared-data
+  - name: clone-repository
+    params:
+    - name: url
+      value: $(params.source-repo)
+    taskRef:
+      kind: ClusterTask
+      name: git-clone
+    workspaces:
+    - name: output
+      workspace: source
+  - name: buildah-build
+    params:
+    - name: IMAGE
+      value: $(params.image_registry):$(tasks.clone-repository.results.commit)
+    - name: DOCKERFILE
+      value: ./Dockerfile
+    - name: CONTEXT
+      value: .
+    - name: STORAGE_DRIVER
+      value: vfs
+    - name: FORMAT
+      value: oci
+    - name: BUILD_EXTRA_ARGS
+      value: ""
+    - name: PUSH_EXTRA_ARGS
+      value: ""
+    - name: SKIP_PUSH
+      value: "false"
+    - name: TLS_VERIFY
+      value: "true"
+    - name: VERBOSE
+      value: "false"
+    runAfter:
+    - clone-repository
+    taskRef:
+      kind: Task
+      name: buildah-build
+    workspaces:
+    - name: source
+      workspace: source
+  - name: kustomize-build
+    params:
+    - name: app-name
+      value: $(params.app-name)
+    - name: app-namespace
+      value: $(context.pipelineRun.namespace)
+    - name: image-with-tag
+      value: $(params.image_registry):$(tasks.clone-repository.results.commit)
+    runAfter:
+    - buildah-build
+    taskRef:
+      kind: Task
+      name: kustomize-build
+    workspaces:
+    - name: source
+      workspace: source
+  - name: gitops-create-new-branch
+    params:
+    - name: directory
+      value: $(params.app-name)
+    - name: gitops-repo
+      value: $(params.gitops-repo)
+    - name: new-branch
+      value: feature-$(context.pipelineRun.name)
+    - name: GITHUB_TOKEN_SECRET_NAME
+      value: $(params.gitops-secret-name)
+    - name: GITHUB_TOKEN_SECRET_KEY
+      value: $(params.gitops-secret-key)
+    runAfter:
+    - kustomize-build
+    taskRef:
+      kind: Task
+      name: gitops-create-new-branch
+    workspaces:
+    - name: source
+      workspace: source
+  - name: github-open-pr
+    params:
+    - name: GITHUB_HOST_URL
+      value: api.github.com
+    - name: API_PATH_PREFIX
+      value: ""
+    - name: REPO_FULL_NAME
+      value: SamChinellato/pe-bootcamp-gitops
+    - name: GITHUB_TOKEN_SECRET_NAME
+      value: gitops-token
+    - name: GITHUB_TOKEN_SECRET_KEY
+      value: GH_TOKEN
+    - name: AUTH_TYPE
+      value: Bearer
+    - name: BRANCH
+      value: feature-$(context.pipelineRun.name)
+    - name: BASE
+      value: main
+    - name: BODY
+      value: Automated Pull request created by Tekton
+    - name: TITLE
+      value: Automated Pull request created by Tekton
+    runAfter:
+    - gitops-create-new-branch
+    taskRef:
+      kind: Task
+      name: github-open-pr
   workspaces:
-    - name: pipeline-shared-data
+  - name: source
